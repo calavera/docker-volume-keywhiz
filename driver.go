@@ -126,6 +126,11 @@ func (d *keywhizDriver) mountServer(mountpoint string) volumeapi.VolumeResponse 
 
 	ownership := keywhizfs.NewOwnership(d.config.User, d.config.Group)
 	kwfs, root, err := keywhizfs.NewKeywhizFs(&client, ownership, timeouts, logConfig)
+	if err != nil {
+		client.Errorf("Mount fail: %v\n", err)
+		return volumeapi.VolumeResponse{Err: err}
+	}
+
 	mountOptions := &fuse.MountOptions{
 		AllowOther: true,
 		Name:       kwfs.String(),
