@@ -14,6 +14,8 @@ import (
 	klog "github.com/square/keywhiz-fs/log"
 )
 
+const keywhizNamespace = "keywhiz-fs"
+
 type keywhizConfig struct {
 	ServerURL      string
 	CertFile       string
@@ -92,7 +94,7 @@ func (d keywhizDriver) Mount(r volumeapi.VolumeRequest) volumeapi.VolumeResponse
 	return volumeapi.VolumeResponse{Mountpoint: m}
 }
 
-func (d keywhizDriver) Umount(r volumeapi.VolumeRequest) volumeapi.VolumeResponse {
+func (d keywhizDriver) Unmount(r volumeapi.VolumeRequest) volumeapi.VolumeResponse {
 	d.m.Lock()
 	defer d.m.Unlock()
 	mountpoint := d.mountpoint(r.Name)
@@ -110,11 +112,15 @@ func (d keywhizDriver) Umount(r volumeapi.VolumeRequest) volumeapi.VolumeRespons
 }
 
 func (d *keywhizDriver) mountpoint(name string) string {
-	return filepath.Join(d.root, name)
+	return filepath.Join(d.root, keywhizNamespace, name)
 }
 
 func (d *keywhizDriver) mountServer(mountpoint string) volumeapi.VolumeResponse {
 	logConfig := klog.Config{d.config.Debug, mountpoint}
+
+	if err := os.MkdirAll(filepath.Dir(mountpoint), 0755); err != nil {
+		return volumeapi.VolumeResponse{Err: err}
+	}
 
 	freshThreshold := 200 * time.Millisecond
 	backendDeadline := 500 * time.Millisecond
