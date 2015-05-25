@@ -9,15 +9,22 @@ Otherwhise, a new volume is mounted per container.
 
 1. Run the daemon and connect to a Keywhiz server:
 
-    $ go run main.go keywhiz_server_url
+```
+$ go run main.go keywhiz_server_url
+```
 
 2. Register the plugin:
 
-    $ echo daemon_url > /usr/share/docker/plugins/keywhiz-fs.spec
+```
+$ echo server_url > /usr/share/docker/plugins/keywhiz-fs.spec
+```
 
 3. Run containers pointing to the driver:
 
-    $ docker run --rm -v all-my-secrets:/etc/secrets --volume-driver keywhiz-fs -it ubuntu bash
+```
+$ docker run --device /dev/fuse:/dev/fuse --cap-add=IPC_LOCK --cap-add=SYS_ADMIN \
+             --rm -v all-my-secrets:/etc/secrets --volume-driver keywhiz-fs -it ubuntu bash
+```
 
 4. :tada:
 
