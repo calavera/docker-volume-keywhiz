@@ -78,16 +78,16 @@ func (d keywhizDriver) Mount(r volumeapi.VolumeRequest) volumeapi.VolumeResponse
 	if err != nil && os.IsNotExist(err) {
 		return d.mountServer(m)
 	} else if err != nil {
-		return volumeapi.VolumeResponse{Err: err}
+		return volumeapi.VolumeResponse{Err: err.Error()}
 	}
 
 	if !fi.IsDir() {
-		return volumeapi.VolumeResponse{Err: fmt.Errorf("%v already exist and it's not a directory", m)}
+		return volumeapi.VolumeResponse{Err: fmt.Sprintf("%v already exist and it's not a directory", m)}
 	}
 
 	s, ok := d.servers[m]
 	if !ok {
-		return volumeapi.VolumeResponse{Err: fmt.Errorf("fuse server destroyed")}
+		return volumeapi.VolumeResponse{Err: "fuse server destroyed"}
 	}
 	s.connections++
 
@@ -102,7 +102,7 @@ func (d keywhizDriver) Unmount(r volumeapi.VolumeRequest) volumeapi.VolumeRespon
 	if s, ok := d.servers[mountpoint]; ok {
 		if s.connections == 1 {
 			err := s.Unmount()
-			return volumeapi.VolumeResponse{Err: err}
+			return volumeapi.VolumeResponse{Err: err.Error()}
 		} else {
 			s.connections--
 		}
@@ -119,7 +119,7 @@ func (d *keywhizDriver) mountServer(mountpoint string) volumeapi.VolumeResponse 
 	logConfig := klog.Config{d.config.Debug, mountpoint}
 
 	if err := os.MkdirAll(filepath.Dir(mountpoint), 0755); err != nil {
-		return volumeapi.VolumeResponse{Err: err}
+		return volumeapi.VolumeResponse{Err: err.Error()}
 	}
 
 	freshThreshold := 200 * time.Millisecond
@@ -134,7 +134,7 @@ func (d *keywhizDriver) mountServer(mountpoint string) volumeapi.VolumeResponse 
 	kwfs, root, err := keywhizfs.NewKeywhizFs(&client, ownership, timeouts, logConfig)
 	if err != nil {
 		client.Errorf("Mount fail: %v\n", err)
-		return volumeapi.VolumeResponse{Err: err}
+		return volumeapi.VolumeResponse{Err: err.Error()}
 	}
 
 	mountOptions := &fuse.MountOptions{
@@ -148,7 +148,7 @@ func (d *keywhizDriver) mountServer(mountpoint string) volumeapi.VolumeResponse 
 	server, err := fuse.NewServer(conn.RawFS(), mountpoint, mountOptions)
 	if err != nil {
 		client.Errorf("Mount fail: %v\n", err)
-		return volumeapi.VolumeResponse{Err: err}
+		return volumeapi.VolumeResponse{Err: err.Error()}
 	}
 
 	d.servers[mountpoint] = &keywhizServer{server, 1}
