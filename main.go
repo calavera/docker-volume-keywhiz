@@ -5,15 +5,23 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
-	"github.com/calavera/docker-volume-api"
+	"github.com/calavera/dkvolume"
 	klog "github.com/square/keywhiz-fs/log"
 	"golang.org/x/sys/unix"
 )
 
+const (
+	keywhizId     = "_keywhiz"
+	socketAddress = "/usr/share/docker/plugins/keywhiz.sock"
+)
+
 var (
-	root           = flag.String("root", volumeapi.DefaultDockerRootDirectory, "Docker volumes root directory")
+	defaultPath = filepath.Join(dkvolume.DefaultDockerRootDirectory, keywhizId)
+
+	root           = flag.String("root", defaultPath, "Docker volumes root directory")
 	certFile       = flag.String("cert", "", "PEM-encoded certificate file")
 	keyFile        = flag.String("key", "client.key", "PEM-encoded private key file")
 	caFile         = flag.String("ca", "cacert.crt", "PEM-encoded CA certificates file")
@@ -51,9 +59,9 @@ func main() {
 	lockMemory(config.Debug)
 
 	d := newKeywhizDriver(*root, config)
-	h := volumeapi.NewVolumeHandler(d)
-	fmt.Println("Listening on :7878")
-	fmt.Println(h.ListenAndServe("tcp", ":7878", ""))
+	h := dkvolume.NewHandler(d)
+	fmt.Printf("Listening on %s\n", socketAddress)
+	fmt.Println(h.ServeUnix("root", socketAddress))
 }
 
 // Locks memory, preventing memory from being written to disk as swap

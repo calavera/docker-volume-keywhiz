@@ -2,19 +2,18 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/calavera/docker-volume-api"
+	"github.com/calavera/dkvolume"
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/square/keywhiz-fs"
 	klog "github.com/square/keywhiz-fs/log"
 )
-
-const keywhizNamespace = "keywhiz-fs"
 
 type keywhizConfig struct {
 	ServerURL      string
@@ -47,79 +46,90 @@ func newKeywhizDriver(root string, config keywhizConfig) keywhizDriver {
 		servers: map[string]*keywhizServer{}}
 }
 
-func (d keywhizDriver) Create(r volumeapi.VolumeRequest) volumeapi.VolumeResponse {
-	return volumeapi.VolumeResponse{}
+func (d keywhizDriver) Create(r dkvolume.Request) dkvolume.Response {
+	return dkvolume.Response{}
 }
 
-func (d keywhizDriver) Remove(r volumeapi.VolumeRequest) volumeapi.VolumeResponse {
+func (d keywhizDriver) Remove(r dkvolume.Request) dkvolume.Response {
 	d.m.Lock()
 	defer d.m.Unlock()
 	m := d.mountpoint(r.Name)
 
 	if s, ok := d.servers[m]; ok {
-		if s.connections == 1 {
+		if s.connections <= 1 {
 			delete(d.servers, m)
 		}
 	}
-	return volumeapi.VolumeResponse{}
+	return dkvolume.Response{}
 }
 
-func (d keywhizDriver) Path(r volumeapi.VolumeRequest) volumeapi.VolumeResponse {
-	return volumeapi.VolumeResponse{Mountpoint: d.mountpoint(r.Name)}
+func (d keywhizDriver) Path(r dkvolume.Request) dkvolume.Response {
+	return dkvolume.Response{Mountpoint: d.mountpoint(r.Name)}
 }
 
-func (d keywhizDriver) Mount(r volumeapi.VolumeRequest) volumeapi.VolumeResponse {
+func (d keywhizDriver) Mount(r dkvolume.Request) dkvolume.Response {
 	d.m.Lock()
 	defer d.m.Unlock()
 	m := d.mountpoint(r.Name)
+	log.Printf("Mounting volume %s on %s\n", r.Name, m)
+
+	s, ok := d.servers[m]
+	if ok && s.connections > 0 {
+		s.connections++
+		return dkvolume.Response{Mountpoint: m}
+	}
 
 	fi, err := os.Lstat(m)
 
-	if err != nil && os.IsNotExist(err) {
-		return d.mountServer(m)
+	if os.IsNotExist(err) {
+		if err := os.MkdirAll(m, 0755); err != nil {
+			return dkvolume.Response{Err: err.Error()}
+		}
 	} else if err != nil {
-		return volumeapi.VolumeResponse{Err: err.Error()}
+		return dkvolume.Response{Err: err.Error()}
 	}
 
-	if !fi.IsDir() {
-		return volumeapi.VolumeResponse{Err: fmt.Sprintf("%v already exist and it's not a directory", m)}
+	if fi != nil && !fi.IsDir() {
+		return dkvolume.Response{Err: fmt.Sprintf("%v already exist and it's not a directory", m)}
 	}
 
-	s, ok := d.servers[m]
-	if !ok {
-		return volumeapi.VolumeResponse{Err: "fuse server destroyed"}
+	server, err := d.mountServer(m)
+	if err != nil {
+		return dkvolume.Response{Err: err.Error()}
 	}
-	s.connections++
 
-	return volumeapi.VolumeResponse{Mountpoint: m}
+	d.servers[m] = &keywhizServer{Server: server, connections: 1}
+
+	return dkvolume.Response{Mountpoint: m}
 }
 
-func (d keywhizDriver) Unmount(r volumeapi.VolumeRequest) volumeapi.VolumeResponse {
+func (d keywhizDriver) Unmount(r dkvolume.Request) dkvolume.Response {
 	d.m.Lock()
 	defer d.m.Unlock()
-	mountpoint := d.mountpoint(r.Name)
+	m := d.mountpoint(r.Name)
+	log.Printf("Unmounting volume %s from %s\n", r.Name, m)
 
-	if s, ok := d.servers[mountpoint]; ok {
+	if s, ok := d.servers[m]; ok {
 		if s.connections == 1 {
-			err := s.Unmount()
-			return volumeapi.VolumeResponse{Err: err.Error()}
-		} else {
-			s.connections--
+			s.Unmount()
 		}
+		s.connections--
+	} else {
+		return dkvolume.Response{Err: fmt.Sprintf("Unable to find volume mounted on %s", m)}
 	}
 
-	return volumeapi.VolumeResponse{}
+	return dkvolume.Response{}
 }
 
 func (d *keywhizDriver) mountpoint(name string) string {
-	return filepath.Join(d.root, keywhizNamespace, name)
+	return filepath.Join(d.root, name)
 }
 
-func (d *keywhizDriver) mountServer(mountpoint string) volumeapi.VolumeResponse {
+func (d *keywhizDriver) mountServer(mountpoint string) (*fuse.Server, error) {
 	logConfig := klog.Config{d.config.Debug, mountpoint}
 
 	if err := os.MkdirAll(filepath.Dir(mountpoint), 0755); err != nil {
-		return volumeapi.VolumeResponse{Err: err.Error()}
+		return nil, err
 	}
 
 	freshThreshold := 200 * time.Millisecond
@@ -134,7 +144,7 @@ func (d *keywhizDriver) mountServer(mountpoint string) volumeapi.VolumeResponse 
 	kwfs, root, err := keywhizfs.NewKeywhizFs(&client, ownership, timeouts, logConfig)
 	if err != nil {
 		client.Errorf("Mount fail: %v\n", err)
-		return volumeapi.VolumeResponse{Err: err.Error()}
+		return nil, err
 	}
 
 	mountOptions := &fuse.MountOptions{
@@ -148,11 +158,10 @@ func (d *keywhizDriver) mountServer(mountpoint string) volumeapi.VolumeResponse 
 	server, err := fuse.NewServer(conn.RawFS(), mountpoint, mountOptions)
 	if err != nil {
 		client.Errorf("Mount fail: %v\n", err)
-		return volumeapi.VolumeResponse{Err: err.Error()}
+		return nil, err
 	}
 
-	d.servers[mountpoint] = &keywhizServer{server, 1}
 	go server.Serve()
 
-	return volumeapi.VolumeResponse{Mountpoint: mountpoint}
+	return server, nil
 }

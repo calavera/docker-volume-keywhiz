@@ -5,34 +5,27 @@ Mount Keywhiz-fs inside your contaniners talking to a remote Keywhiz server.
 The FUSE mount point is shared between containers if the name of the volume is the same between containers.
 Otherwhise, a new volume is mounted per container.
 
+## Installation
+
+Using go (until we have proper binaries):
+
+```
+$ go get github.com/calavera/docker-volume-keywhiz
+```
+
 ## Usage
 
 1. Run the daemon and connect to a Keywhiz server:
 
 ```
-$ go run main.go keywhiz_server_url
+$ sudo docker-volume-keywhiz keywhiz_server_url
 ```
 
-2. Register the plugin:
+2. Run containers pointing to the driver:
 
 ```
-$ echo server_url > /usr/share/docker/plugins/keywhiz-fs.spec
+$ docker run --volume-driver keywhiz-fs --volumev all-my-secrets:/etc/secrets -it alpine ls /etc/secrets/
 ```
-
-3. Run containers pointing to the driver:
-
-```
-$ docker run --device /dev/fuse:/dev/fuse --cap-add=IPC_LOCK --cap-add=SYS_ADMIN \
-             --rm -v all-my-secrets:/etc/secrets --volume-driver keywhiz-fs -it ubuntu bash
-```
-
-4. :tada:
-
-## TODO
-
-- Allow to use a socket connection rather than tcp.
-- Run inside a container.
-- More TODOs.
 
 ## LICENSE
 
