@@ -24,7 +24,7 @@ $ sudo docker-volume-keywhiz keywhiz_server_url
 2. Run containers pointing to the driver:
 
 ```
-$ docker run --volume-driver keywhiz-fs --volumev all-my-secrets:/etc/secrets -it alpine ls /etc/secrets/
+$ docker run --volume-driver keywhiz --volumev all-my-secrets:/etc/secrets -it alpine ls /etc/secrets/
 ```
 
 ## LICENSE
