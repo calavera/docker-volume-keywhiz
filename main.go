@@ -66,7 +66,10 @@ func main() {
 
 // Locks memory, preventing memory from being written to disk as swap
 func lockMemory(debug bool) {
-	logConfig := klog.Config{debug, ""}
+	logConfig := klog.Config{
+		Debug:      debug,
+		Mountpoint: "",
+	}
 	logger := klog.New("kwfs_main", logConfig)
 
 	err := unix.Mlockall(unix.MCL_FUTURE | unix.MCL_CURRENT)

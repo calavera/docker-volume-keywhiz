@@ -36,14 +36,16 @@ type keywhizDriver struct {
 	root    string
 	config  keywhizConfig
 	servers map[string]*keywhizServer
-	m       sync.Mutex
+	m       *sync.Mutex
 }
 
 func newKeywhizDriver(root string, config keywhizConfig) keywhizDriver {
 	return keywhizDriver{
 		root:    root,
 		config:  config,
-		servers: map[string]*keywhizServer{}}
+		servers: map[string]*keywhizServer{},
+		m:       &sync.Mutex{},
+	}
 }
 
 func (d keywhizDriver) Create(r dkvolume.Request) dkvolume.Response {
@@ -126,7 +128,10 @@ func (d *keywhizDriver) mountpoint(name string) string {
 }
 
 func (d *keywhizDriver) mountServer(mountpoint string) (*fuse.Server, error) {
-	logConfig := klog.Config{d.config.Debug, mountpoint}
+	logConfig := klog.Config{
+		Debug:      d.config.Debug,
+		Mountpoint: mountpoint,
+	}
 
 	if err := os.MkdirAll(filepath.Dir(mountpoint), 0755); err != nil {
 		return nil, err
@@ -135,7 +140,11 @@ func (d *keywhizDriver) mountServer(mountpoint string) (*fuse.Server, error) {
 	freshThreshold := 200 * time.Millisecond
 	backendDeadline := 500 * time.Millisecond
 	maxWait := d.config.TimeoutSeconds + backendDeadline
-	timeouts := keywhizfs.Timeouts{freshThreshold, backendDeadline, maxWait}
+	timeouts := keywhizfs.Timeouts{
+		Fresh:           freshThreshold,
+		BackendDeadline: backendDeadline,
+		MaxWait:         maxWait,
+	}
 
 	client := keywhizfs.NewClient(d.config.CertFile, d.config.KeyFile, d.config.CaFile,
 		d.config.ServerURL, d.config.TimeoutSeconds, logConfig, d.config.Ping)
