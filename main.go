@@ -15,7 +15,7 @@ import (
 
 const (
 	keywhizId     = "_keywhiz"
-	socketAddress = "/usr/share/docker/plugins/keywhiz.sock"
+	socketAddress = "/run/docker/plugins/keywhiz.sock"
 )
 
 var (
