@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/calavera/dkvolume"
+        "github.com/docker/go-plugins-helpers/volume"
 	klog "github.com/square/keywhiz-fs/log"
 	"golang.org/x/sys/unix"
 )
@@ -19,7 +19,7 @@ const (
 )
 
 var (
-	defaultPath = filepath.Join(dkvolume.DefaultDockerRootDirectory, keywhizId)
+	defaultPath = filepath.Join(volume.DefaultDockerRootDirectory, keywhizId)
 
 	root           = flag.String("root", defaultPath, "Docker volumes root directory")
 	certFile       = flag.String("cert", "", "PEM-encoded certificate file")
@@ -59,7 +59,7 @@ func main() {
 	lockMemory(config.Debug)
 
 	d := newKeywhizDriver(*root, config)
-	h := dkvolume.NewHandler(d)
+	h := volume.NewHandler(d)
 	fmt.Printf("Listening on %s\n", socketAddress)
 	fmt.Println(h.ServeUnix("root", socketAddress))
 }

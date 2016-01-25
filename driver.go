@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/calavera/dkvolume"
+        "github.com/docker/go-plugins-helpers/volume"
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/square/keywhiz-fs"
@@ -48,11 +48,11 @@ func newKeywhizDriver(root string, config keywhizConfig) keywhizDriver {
 	}
 }
 
-func (d keywhizDriver) Create(r dkvolume.Request) dkvolume.Response {
-	return dkvolume.Response{}
+func (d keywhizDriver) Create(r volume.Request) volume.Response {
+	return volume.Response{}
 }
 
-func (d keywhizDriver) Remove(r dkvolume.Request) dkvolume.Response {
+func (d keywhizDriver) Remove(r volume.Request) volume.Response {
 	d.m.Lock()
 	defer d.m.Unlock()
 	m := d.mountpoint(r.Name)
@@ -62,14 +62,14 @@ func (d keywhizDriver) Remove(r dkvolume.Request) dkvolume.Response {
 			delete(d.servers, m)
 		}
 	}
-	return dkvolume.Response{}
+	return volume.Response{}
 }
 
-func (d keywhizDriver) Path(r dkvolume.Request) dkvolume.Response {
-	return dkvolume.Response{Mountpoint: d.mountpoint(r.Name)}
+func (d keywhizDriver) Path(r volume.Request) volume.Response {
+	return volume.Response{Mountpoint: d.mountpoint(r.Name)}
 }
 
-func (d keywhizDriver) Mount(r dkvolume.Request) dkvolume.Response {
+func (d keywhizDriver) Mount(r volume.Request) volume.Response {
 	d.m.Lock()
 	defer d.m.Unlock()
 	m := d.mountpoint(r.Name)
@@ -78,34 +78,34 @@ func (d keywhizDriver) Mount(r dkvolume.Request) dkvolume.Response {
 	s, ok := d.servers[m]
 	if ok && s.connections > 0 {
 		s.connections++
-		return dkvolume.Response{Mountpoint: m}
+		return volume.Response{Mountpoint: m}
 	}
 
 	fi, err := os.Lstat(m)
 
 	if os.IsNotExist(err) {
 		if err := os.MkdirAll(m, 0755); err != nil {
-			return dkvolume.Response{Err: err.Error()}
+			return volume.Response{Err: err.Error()}
 		}
 	} else if err != nil {
-		return dkvolume.Response{Err: err.Error()}
+		return volume.Response{Err: err.Error()}
 	}
 
 	if fi != nil && !fi.IsDir() {
-		return dkvolume.Response{Err: fmt.Sprintf("%v already exist and it's not a directory", m)}
+		return volume.Response{Err: fmt.Sprintf("%v already exist and it's not a directory", m)}
 	}
 
 	server, err := d.mountServer(m)
 	if err != nil {
-		return dkvolume.Response{Err: err.Error()}
+		return volume.Response{Err: err.Error()}
 	}
 
 	d.servers[m] = &keywhizServer{Server: server, connections: 1}
 
-	return dkvolume.Response{Mountpoint: m}
+	return volume.Response{Mountpoint: m}
 }
 
-func (d keywhizDriver) Unmount(r dkvolume.Request) dkvolume.Response {
+func (d keywhizDriver) Unmount(r volume.Request) volume.Response {
 	d.m.Lock()
 	defer d.m.Unlock()
 	m := d.mountpoint(r.Name)
@@ -117,10 +117,10 @@ func (d keywhizDriver) Unmount(r dkvolume.Request) dkvolume.Response {
 		}
 		s.connections--
 	} else {
-		return dkvolume.Response{Err: fmt.Sprintf("Unable to find volume mounted on %s", m)}
+		return volume.Response{Err: fmt.Sprintf("Unable to find volume mounted on %s", m)}
 	}
 
-	return dkvolume.Response{}
+	return volume.Response{}
 }
 
 func (d *keywhizDriver) mountpoint(name string) string {
